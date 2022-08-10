@@ -98,7 +98,13 @@ The function `check_hit` checks whether previously invoked bombardment has hit t
 
 It receives `square_commit` and `square_reveal`.
 
-If re-hashed `square_reveal` matches `square_commit` it will return true, and false otherwise.
+It will assert re-hashed `square_reveal` matches `square_commit` to make sure player provided the rigth solution and is not lying.
+
+After that check, the `square_reveal` is checked to see if it the ship is there.
+
+If the number is even, there is no ship. If it is odd, the ship is located there and a hit has been scored.
+
+Return 1 for a hit, and 0 for a miss.
 
 #### Load masked ship positions
 
