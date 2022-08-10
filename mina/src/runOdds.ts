@@ -47,13 +47,12 @@ export async function run() {
     }
   }
   let honeypot = Field(50000);
-  let minOdd = Field(2);
-  let maxOdd = Field(100);
 
   // deploy smart contract and initialize values
   try {
     const tx = await Mina.transaction(deployerAcc, () => {
-      // Party.fundNewAccount(deployerAcc);
+      const initialBalance = UInt64.fromNumber(100000000);
+      Party.fundNewAccount(deployerAcc, { initialBalance: initialBalance });
       zkAppInstance.deploy({
         zkappKey: zkAppPrivkey,
       });
@@ -64,11 +63,8 @@ export async function run() {
         send: Permissions.proofOrSignature(),
       });
       zkAppInstance.init(
-        player1Acc.toPublicKey(),
-        player2Acc.toPublicKey(),
-        honeypot,
-        minOdd,
-        maxOdd
+        initialBalance,
+        honeypot
       );
     });
     await tx.send().wait();
@@ -82,11 +78,9 @@ export async function run() {
   );
 
   console.log(
-    'player2 balance before game begins: ',
+    'player1 balance before game begins: ',
     Mina.getBalance(player1Acc.toPublicKey()).toString()
   );
-
-  console.log('Reward price to be distributed: ', honeypot);
 
   console.log('Player1 starts the round');
   let selectedOdd = await askQuestion(
@@ -95,7 +89,6 @@ export async function run() {
   try {
     const tx2 = await Mina.transaction(player1Acc, () => {
       let userParty = Party.createSigned(player1Acc);
-
       zkAppInstance.player1SelectOdd(Field(selectedOdd));
       userParty.balance.subInPlace(new UInt64(honeypot));
       if (!doProofs) {
@@ -105,10 +98,11 @@ export async function run() {
     if (doProofs) await tx2.prove();
     await tx2.send().wait();
   } catch (err) {
-    console.log(err);
+    console.log("Invalid number");
+    return;
   }
   console.log(
-    'owner balance after starting round: ',
+    'player1 balance after starting round: ',
     Mina.getBalance(player1Acc.toPublicKey()).toString()
   );
 
@@ -124,10 +118,10 @@ export async function run() {
     'hash of player1 commitment is: ',
     zkAppInstance.player1commitment.get().toString()
   );
-  let odd = await askQuestion('Hey user2, what is your odd? \n');
+  let selectedodd = await askQuestion('Hey user2, what is your odd (Ensure its between 2-100)? \n');
   try {
     const tx3 = await Mina.transaction(player2Acc, () => {
-      zkAppInstance.player2SelectOdd(Field(odd));
+      zkAppInstance.player2SelectOdd(Field(selectedodd));
       if (!doProofs) {
         zkAppInstance.sign(zkAppPrivkey);
       }
@@ -135,9 +129,14 @@ export async function run() {
     if (doProofs) await tx3.prove();
     await tx3.send().wait();
   } catch (err) {
-    console.log(err);
+    console.log("Invalid number");
     return;
   }
+
+  console.log(
+    'player2 balance after starting round: ',
+    Mina.getBalance(player2Acc.toPublicKey()).toString()
+  );
 
   console.log('Calculating results...😱');
   try {
@@ -153,7 +152,7 @@ export async function run() {
     await tx4.send().wait();
     console.log('correct!');
     console.log(
-      'Player balance after correct guess ',
+      'Player2 balance after game',
       Mina.getBalance(player2Acc.toPublicKey()).toString()
     );
     console.log(
@@ -161,7 +160,6 @@ export async function run() {
       Mina.getBalance(zkAppAddress).toString()
     );
   } catch (e) {
-    console.log(e);
     console.log('wrong commitments');
   }
 }
