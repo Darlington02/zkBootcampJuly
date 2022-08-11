@@ -63,6 +63,8 @@ export async function run() {
         send: Permissions.proofOrSignature(),
       });
       zkAppInstance.init(
+        player1Acc.toPublicKey(),
+        player2Acc.toPublicKey(),
         initialBalance,
         honeypot
       );
@@ -89,7 +91,7 @@ export async function run() {
   try {
     const tx2 = await Mina.transaction(player1Acc, () => {
       let userParty = Party.createSigned(player1Acc);
-      zkAppInstance.player1SelectOdd(Field(selectedOdd));
+      zkAppInstance.player1SelectOdd(Field(selectedOdd), player1Acc);
       userParty.balance.subInPlace(new UInt64(honeypot));
       if (!doProofs) {
         zkAppInstance.sign(zkAppPrivkey);
@@ -98,7 +100,7 @@ export async function run() {
     if (doProofs) await tx2.prove();
     await tx2.send().wait();
   } catch (err) {
-    console.log("Invalid number");
+    console.log("Invalid number or wrong user permission");
     return;
   }
   console.log(
@@ -121,7 +123,7 @@ export async function run() {
   let selectedodd = await askQuestion('Hey user2, what is your odd (Ensure its between 2-100)? \n');
   try {
     const tx3 = await Mina.transaction(player2Acc, () => {
-      zkAppInstance.player2SelectOdd(Field(selectedodd));
+      zkAppInstance.player2SelectOdd(Field(selectedodd), player2Acc);
       if (!doProofs) {
         zkAppInstance.sign(zkAppPrivkey);
       }
@@ -129,7 +131,7 @@ export async function run() {
     if (doProofs) await tx3.prove();
     await tx3.send().wait();
   } catch (err) {
-    console.log("Invalid number");
+    console.log("Invalid number or wrong user permission");
     return;
   }
 
