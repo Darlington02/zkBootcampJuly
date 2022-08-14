@@ -63,7 +63,7 @@ func set_up_game{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_p
     let firstPlayer = Player(player1, 0, 0)
     let secondPlayer = Player(player2, 0, 0)
     let gameinit = Game(firstPlayer, secondPlayer, 0, (0,0), 0)
-    games.write(newGc, gameinit)
+    games.write(gc, gameinit)
     game_counter.write(newGc)
     return ()
 end
@@ -83,7 +83,11 @@ end
 func check_hit{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, bitwise_ptr: BitwiseBuiltin*}(square_commit : felt, square_reveal : felt) -> (hit : felt):
     let (hashedReveal) = hash_numb(square_reveal)
     if hashedReveal == square_commit:
-        return(1)
+        let (q, r) = unsigned_div_rem(square_reveal, 2)
+        if r == 1:
+            return(1)
+        end
+        return(0)
     end
     return(0)
 end
