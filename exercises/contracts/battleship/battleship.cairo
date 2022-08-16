@@ -1,5 +1,4 @@
 
-## I AM NOT DONE
 
 %lang starknet
 from starkware.cairo.common.cairo_builtins import HashBuiltin, BitwiseBuiltin
@@ -103,6 +102,11 @@ end
 ## Check malicious call
 @external
 func add_squares{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(idx : felt, game_idx : felt, hashes_len : felt, hashes : felt*, player : felt, x: felt, y: felt):
+    let (game) = games.read(game_idx)
+    let (caller) = get_caller_address()
+    # check caller's eligibility
+    let (eligibility) = check_caller(caller, game)
+    load_hashes(idx, game_idx, hashes_len, hashes, player, x, y)
     return ()
 end
 

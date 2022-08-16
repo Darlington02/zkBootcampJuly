@@ -1,9 +1,8 @@
-## I AM NOT DONE
 
 %lang starknet
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.uint256 import Uint256, uint256_le, uint256_unsigned_div_rem, uint256_sub
-from starkware.starknet.common.syscalls import get_caller_address
+from starkware.starknet.common.syscalls import get_caller_address, get_contract_address
 from starkware.cairo.common.math import unsigned_div_rem, assert_le_felt
 
 from starkware.cairo.common.math import (
@@ -30,6 +29,14 @@ from exercises.contracts.erc20.ERC20_base import (
     ERC20_burn
 )
 
+@storage_var
+    func admin() -> (admin_address: felt):
+end
+
+@storage_var 
+    func whitelist(account) -> (status: felt):
+end
+
 #
 # Constructor
 #
@@ -45,8 +52,18 @@ func constructor{
         initial_supply: Uint256,
         recipient: felt
     ):
-    ERC20_initializer(name, symbol, initial_supply, recipient)    
+    ERC20_initializer(name, symbol, initial_supply, recipient) 
+    admin.write(recipient) 
     return ()
+end
+
+# 
+# Function for converting from Uint to felt
+# 
+
+func to_felt{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(value : Uint256) -> (res : felt):
+    let res = value.low + value.high * (2 ** 128)
+    return (res)
 end
 
 #
@@ -114,6 +131,16 @@ func allowance{
     return (remaining)
 end
 
+@view 
+func get_admin{
+        syscall_ptr : felt*,
+        pedersen_ptr : HashBuiltin*,
+        range_check_ptr
+    }() -> (admin_address: felt):
+    let(admin_address) = admin.read()
+    return (admin_address)
+end
+
 #
 # Externals
 #
@@ -125,7 +152,11 @@ func transfer{
         pedersen_ptr : HashBuiltin*,
         range_check_ptr
     }(recipient: felt, amount: Uint256) -> (success: felt):
-
+    # divide amount by 2 and check if remainder is zero to know if amount is even
+    let (_amount) = to_felt(amount)
+    let (x, r) = unsigned_div_rem(_amount, 2)
+    # transfer tokens if r = 0, else fail.
+    assert r = 0
     ERC20_transfer(recipient, amount)    
     return (1)
 end
@@ -136,8 +167,13 @@ func faucet{
         pedersen_ptr : HashBuiltin*,
         range_check_ptr
     }(amount:Uint256) -> (success: felt):
-
+    # get caller address
     let (caller) = get_caller_address()
+    # convert amount to felt for comparison
+    let (_amount) = to_felt(amount)
+    # check that amount is less than or equal to 10,000
+    assert_le(_amount, 10000)
+    # mint tokens
     ERC20_mint(caller, amount)
     return (1)
 end
@@ -148,7 +184,60 @@ func burn{
         syscall_ptr : felt*, 
         pedersen_ptr : HashBuiltin*,
         range_check_ptr
-    }(amount: Uint256) -> (success: felt):   
-    
+    }(amount: Uint256) -> (success: felt): 
+    alloc_locals  
+    # get admin address
+    let (owner) = get_admin()
+    # divide _amount by 10 to get 10% of amount, since cairo has issues with decimals
+    let (q, _) = uint256_unsigned_div_rem(amount, Uint256(10, 0))
+    # transfer owner's percentage to owner's account
+    ERC20_transfer(owner, q)
+    # burn the rest
+    let (account) = get_caller_address()
+    let (burned_amount) = uint256_sub(amount, q)
+    ERC20_burn(account, burned_amount)
+    return (1)
+end
+
+@external
+func request_whitelist{
+        syscall_ptr : felt*,
+        pedersen_ptr : HashBuiltin*,
+        range_check_ptr
+    }() -> (level_granted: felt):
+    # get caller address
+    let (caller) = get_caller_address()
+    # add to whitelist
+    whitelist.write(caller, 1) 
+    return(1)
+end
+
+@external
+func check_whitelist{
+        syscall_ptr : felt*,
+        pedersen_ptr : HashBuiltin*,
+        range_check_ptr
+    }(account: felt) -> (allowed_v: felt):
+    let (whitelisted) = whitelist.read(account)
+    if whitelisted == 1:
+        return (1)
+    end
+    return (0)
+end
+
+@external
+func exclusive_faucet{
+        syscall_ptr : felt*,
+        pedersen_ptr : HashBuiltin*,
+        range_check_ptr
+    }(amount: Uint256) -> (success: felt):
+    # get caller address
+    let (caller) = get_caller_address()
+    # check if caller is whitelisted
+    let (allowed_v) = check_whitelist(caller)
+    if allowed_v == 1:
+        ERC20_mint(caller, amount)
+        return (1)
+    end
     return (0)
 end
