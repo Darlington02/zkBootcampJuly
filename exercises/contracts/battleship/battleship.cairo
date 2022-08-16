@@ -1,4 +1,4 @@
-
+## I AM NOT DONE
 
 %lang starknet
 from starkware.cairo.common.cairo_builtins import HashBuiltin, BitwiseBuiltin
@@ -94,7 +94,91 @@ end
 
 @external
 func bombard{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr, bitwise_ptr: BitwiseBuiltin*}(game_idx : felt, x : felt, y : felt, square_reveal : felt):
-    return ()
+    alloc_locals
+    let (game) = games.read(game_idx)
+    let (caller) = get_caller_address()
+
+    # check that the caller is a valaid player
+    let (valid_caller) = check_caller(caller,game)
+    assert valid_caller = 1
+
+    # confirm that game winner has not been set
+    assert game.winner = 0
+
+    #check who is the caller
+    let player1 = game.player1.address
+    let player2 = game.player2.address
+    local current_player 
+    local other_player
+    
+    if caller == player1:
+        current_player = caller
+        other_player = player2
+    else:
+        current_player = caller
+        other_player = player1
+    end
+
+
+    # update the move by the caller
+    let (square) = grid.read(game_idx, current_player, x, y)
+    let new_square = Square(square.square_commit, square.square_reveal, 1)
+    grid.write(game_idx, current_player, x, y, new_square)
+
+    #this is the first move
+    if game.next_player == 0:
+        # This is the first move. Update the game and return
+        let updatedGame = Game(game.player1,game.player2, other_player, (x,y), game.winner)
+        games.write(game_idx, updatedGame)
+        return ()
+    end
+
+    # if it is not first move it will assert that is the right player and call check_hit. 
+    if game.next_player != 0:
+        assert game.next_player = current_player
+        let (last_square) = grid.read(game_idx, other_player, game.last_move[0], game.last_move[1])
+        let (isHit) = check_hit(last_square.square_commit, square_reveal)
+
+        # if the battleship has been hit, update points for the current player and then update game
+        if isHit == 1:
+            if game.player1.address == current_player:
+                let points = game.player1.points + 1
+                let player1Obj = Player(game.player1.address, points, game.player1.revealed)                    
+                if points == 4:
+                    let updatedGame = Game(player1Obj,game.player2,other_player, (x,y), game.player1.address)
+                    games.write(game_idx, updatedGame)
+                    return()
+                else:
+                    let updatedGame = Game(player1Obj,game.player2,other_player, (x,y), game.winner)
+                    games.write(game_idx, updatedGame)
+                    return()
+                end
+            end
+
+
+            if game.player2.address == current_player:
+                let points = game.player2.points + 1
+                let player2Obj = Player(game.player2.address, points, game.player2.revealed)                    
+
+                if points == 4:
+                    let updatedGame = Game(game.player1,player2Obj,other_player, (x,y), game.player2.address)
+                    games.write(game_idx, updatedGame)
+                    return ()
+                else:
+                    let updatedGame = Game(game.player1,player2Obj,other_player, (x,y), game.winner)
+                    games.write(game_idx, updatedGame)
+                    return ()
+                end
+            end
+            return()         
+        else:
+            # update the game without updating any points
+            let updatedGame = Game(game.player1,game.player2,other_player, (x,y), game.winner)
+            games.write(game_idx, updatedGame)
+            return ()
+        end
+    end
+    return()
 end
 
 
